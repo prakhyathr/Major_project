@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  mongo:
+    image: mongo:6.0
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "27018:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=blr_geo_events
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  backend:
+    build: ./backend
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGO_URL=mongodb://mongo:27017
+      - MONGO_DB_NAME=blr_geo_events
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=supersecretkey
+    depends_on:
+      - mongo
+      - redis
+
+  worker:
+    build: ./backend
+    command: celery -A worker.celery_app worker --loglevel=info
+    volumes:
+      - ./backend:/app
+    environment:
+      - MONGO_URL=mongodb://mongo:27017
+      - MONGO_DB_NAME=blr_geo_events
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - backend
+      - redis
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_URL=http://localhost:8000
+
+volumes:
+  mongo_data:
