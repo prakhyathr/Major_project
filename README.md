@@ -5,7 +5,7 @@ A full-stack web application for discovering and clustering events in Bengaluru 
 ## Tech Stack
 - **Frontend**: Vue 3, Vite, Pinia, TailwindCSS, Mapbox GL JS
 - **Backend**: FastAPI, SQLModel, AsyncPG, Celery
-- **Database**: PostgreSQL + PostGIS
+- **Database**: MongoDB
 - **ML/Clustering**: Python (scikit-learn, DBSCAN)
 - **Infrastructure**: Docker Compose
 
