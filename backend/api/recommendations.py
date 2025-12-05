@@ -50,16 +50,13 @@ async def get_recommendations(
         events = await cursor.to_list(length=10)
     
     # 3. Content-Based Filtering (ML Re-ranking)
-    from ml.engine import MLEngine
-    
-    # In a real app, the model would be pre-trained and loaded.
-    # Here, we train on-the-fly with the fetched candidates for demonstration.
-    ml_engine = MLEngine()
+    from ml.engine import ml_engine
     
     # Convert MongoDB objects to dicts for the engine
     candidate_events = [event for event in events]
     
-    # Train on these candidates to build the TF-IDF matrix
+    # Train on these candidates (or just encode them)
+    # Note: With BERT, 'training' just means encoding.
     ml_engine.train(candidate_events)
     
     # Prepare vendor profile for prediction

@@ -22,9 +22,23 @@
     <!-- Right: Content (40%) -->
     <div class="w-2/5 h-full flex flex-col bg-white overflow-hidden">
         <!-- Header -->
-        <div class="p-6 border-b border-gray-100 bg-white z-10">
-            <h1 class="text-2xl font-bold text-gray-800 mb-1">Discover Events</h1>
-            <p class="text-sm text-gray-500">Find the perfect events for your business in Bengaluru</p>
+        <div class="p-6 border-b border-gray-100 bg-white z-10 flex justify-between items-center">
+            <div class="flex items-center">
+                <img src="/assets/logo.jpg" alt="BLR Hive Logo" class="h-20 w-auto mr-4">
+                <div>
+                   <h1 class="text-xl font-bold text-gray-800">Discover Events</h1>
+                   <p class="text-xs text-gray-500">Bengaluru's Lifestyle Hub</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-3">
+                <button @click="$router.push('/profile')" class="text-sm text-gray-700 hover:text-orange-600 font-medium px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg hover:bg-orange-50 transition-colors flex items-center">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                    My Profile
+                </button>
+                <button @click="logout" class="text-sm text-red-500 hover:text-red-700 font-medium px-3 py-2 border border-red-200 rounded-lg hover:bg-red-50 transition-colors">
+                    Logout
+                </button>
+            </div>
         </div>
 
         <!-- Scrollable Content -->
@@ -59,7 +73,9 @@
                 <EventCard 
                     v-for="event in displayedEvents" 
                     :key="event.id" 
-                    :event="event" 
+                    :event="event"
+                    :isSaved="savedEventIds.has(event.id || event._id)"
+                    @toggleSave="handleToggleSave"
                 />
             </div>
             
@@ -78,6 +94,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import MapView from '../components/MapView.vue'
 import EventCard from '../components/EventCard.vue'
 import Filters from '../components/Filters.vue'
@@ -85,6 +102,7 @@ import Recommendations from '../components/Recommendations.vue'
 import api from '../utils/api'
 import { getDistanceFromLatLonInKm } from '../utils/distance'
 
+const router = useRouter()
 const allEvents = ref([])
 const recommendations = ref([])
 const vendorInterests = ref([])
@@ -96,10 +114,29 @@ const filters = ref({
     selectedInterests: []
 })
 const showRecommendationsOnly = ref(false)
+const savedEventIds = ref(new Set())
+
+// Logout Function
+const logout = () => {
+    localStorage.removeItem('token')
+    savedEventIds.value.clear()
+    router.push('/')
+}
 
 // Computed Categories
 const categories = computed(() => {
-    const cats = new Set(allEvents.value.map(e => e.category).filter(Boolean))
+    const cats = new Set(allEvents.value
+        .map(e => e.category ? e.category.trim() : '')
+        .filter(c => {
+            // Strong filtering rules
+            if (!c) return false
+            if (c.toLowerCase().includes('all categories')) return false
+            if (c.includes('?ref=')) return false
+            if (c.includes('http')) return false // URL
+            if (c.length > 50) return false // Too long
+            return true
+        })
+    )
     return Array.from(cats).sort()
 })
 
@@ -197,15 +234,25 @@ const showAllEvents = () => {
     // Currently we show all anyway.
 }
 
+const handleToggleSave = (event) => {
+    const id = event.id || event._id
+    if (savedEventIds.value.has(id)) {
+        savedEventIds.value.delete(id)
+    } else {
+        savedEventIds.value.add(id)
+    }
+}
+
 // API Calls
 const fetchData = async () => {
     try {
         const [eventsRes, vendorRes] = await Promise.all([
-            api.getEvents(),
+        api.getEvents(),
             api.getVendorProfile()
         ])
         allEvents.value = eventsRes.data
         vendorInterests.value = vendorRes.data.interests || []
+        savedEventIds.value = new Set(vendorRes.data.saved_events || [])
     } catch (e) {
         console.error("Failed to fetch data", e)
     }

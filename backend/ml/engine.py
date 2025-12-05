@@ -1,23 +1,24 @@
 import pandas as pd
 import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+from sentence_transformers import SentenceTransformer, util
 from typing import List, Dict, Any
 import joblib
 import os
 
 class MLEngine:
     def __init__(self):
-        self.vectorizer = TfidfVectorizer(stop_words='english')
-        self.event_vectors = None
+        # Load a pre-trained model (MiniLM is fast and accurate)
+        # This will download ~90MB on first run
+        print("Loading BERT model (all-MiniLM-L6-v2)...")
+        self.model = SentenceTransformer('all-MiniLM-L6-v2')
+        self.event_embeddings = None
         self.event_ids = []
         self.events_df = None
-        self.model_path = "ml_model.joblib"
+        self.model_path = "ml_model_bert.joblib"
 
     def train(self, events: List[Dict[str, Any]]):
         """
-        Train the content-based filtering model (TF-IDF on descriptions/titles).
-        In a real scenario, this would also train an XGBoost ranker on interaction logs.
+        Train the content-based filtering model (BERT Embeddings).
         """
         if not events:
             print("No events to train on.")
@@ -26,66 +27,64 @@ class MLEngine:
         self.events_df = pd.DataFrame(events)
         self.event_ids = self.events_df['_id'].astype(str).tolist()
         
-        # Create a rich text field for vectorization
+        # Create a rich text field for embedding
+        # We emphasize Category and Interests for semantic matching
         self.events_df['content'] = (
-            self.events_df['title'].fillna('') + " " + 
-            self.events_df['description'].fillna('') + " " + 
-            self.events_df['category'].fillna('') + " " +
-            self.events_df['main_zone'].fillna('')
+            "Category: " + self.events_df['category'].fillna('') + ". " +
+            "Title: " + self.events_df['title'].fillna('') + ". " + 
+            "Description: " + self.events_df['description'].fillna('') + ". " +
+            "Zone: " + self.events_df['main_zone'].fillna('')
         )
         
-        print(f"Training vectorizer on {len(events)} events...")
-        self.event_vectors = self.vectorizer.fit_transform(self.events_df['content'])
-        print("Training complete.")
+        print(f"Encoding {len(events)} events with BERT...")
+        # Convert to tensor for fast cosine similarity on GPU/CPU
+        self.event_embeddings = self.model.encode(self.events_df['content'].tolist(), convert_to_tensor=True)
+        print("Encoding complete.")
 
     def predict(self, vendor_profile: Dict[str, Any], candidate_events: List[Dict[str, Any]], top_n: int = 10) -> List[Dict[str, Any]]:
         """
-        Rank events for a vendor based on:
-        1. Content Similarity (Vendor Interests vs Event Content)
-        2. Location Proximity (already filtered by DB, but can be re-scored)
+        Rank events using Semantic Similarity.
         """
-        if self.event_vectors is None or not candidate_events:
+        if self.event_embeddings is None or not candidate_events:
             return candidate_events[:top_n]
 
-        # 1. Build Vendor Profile Vector
-        # Combine vendor interests and category into a query string
+        # 1. Build Vendor Profile Query
         vendor_text = (
-            (vendor_profile.get('category') or '') + " " + 
-            " ".join(vendor_profile.get('interests', []))
+            "Category: " + (vendor_profile.get('category') or '') + ". " + 
+            "Interests: " + ", ".join(vendor_profile.get('interests', [])) + "."
         )
         
-        if not vendor_text.strip():
-            # Fallback: Return recent events if no profile info
-            return candidate_events[:top_n]
+        # 2. Encode Vendor Profile
+        vendor_embedding = self.model.encode(vendor_text, convert_to_tensor=True)
 
-        vendor_vector = self.vectorizer.transform([vendor_text])
-
-        # 2. Calculate Similarity with ALL trained events
-        # Note: In production, we'd only score the 'candidate_events', but for simplicity
-        # we'll assume candidate_events are the ones we trained on or a subset.
-        # If candidates are new, we need to transform them on the fly.
+        # 3. Handle Candidate Matching
+        # In a real app with static events, we use self.event_embeddings.
+        # But if candidate_events allows dynamic filtering, we should map them back to embeddings.
+        # For simplicity in this demo, we'll re-encode the specific candidates if they differ from training set
+        # OR just assume we are ranking the 'candidate_events' passed in.
         
-        # Let's handle the case where candidates might not be in the training set
-        # by transforming them now. This is safer for dynamic data.
+        # Fast path: If all candidates are in our training set (naive check), use pre-computed
+        # For now, let's re-encode candidates to be safe and robust for dynamic lists
         
         candidate_df = pd.DataFrame(candidate_events)
         candidate_content = (
-            candidate_df['title'].fillna('') + " " + 
-            candidate_df['description'].fillna('') + " " + 
-            candidate_df['category'].fillna('') + " " +
-            candidate_df['main_zone'].fillna('')
+            "Category: " + candidate_df['category'].fillna('') + ". " +
+            "Title: " + candidate_df['title'].fillna('') + ". " + 
+            "Description: " + candidate_df['description'].fillna('') + ". " +
+            "Zone: " + candidate_df['main_zone'].fillna('')
         )
         
-        candidate_vectors = self.vectorizer.transform(candidate_content)
+        candidate_embeddings = self.model.encode(candidate_content.tolist(), convert_to_tensor=True)
         
-        # Cosine Similarity
-        scores = cosine_similarity(vendor_vector, candidate_vectors).flatten()
-        
-        # 3. Add scores to events and sort
+        # 4. Calculate Cosine Similarity
+        # util.cos_sim returns a matrix [1, N_candidates]
+        cosine_scores = util.cos_sim(vendor_embedding, candidate_embeddings)[0]
+
+        # 5. Add scores and sort
         scored_events = []
         for i, event in enumerate(candidate_events):
             event_with_score = event.copy()
-            event_with_score['ml_score'] = float(scores[i])
+            event_with_score['ml_score'] = float(cosine_scores[i])
             scored_events.append(event_with_score)
             
         # Sort by score descending

@@ -24,7 +24,7 @@
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-200 focus:border-orange-500 outline-none bg-white"
              >
                  <option value="">All Categories</option>
-                 <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
+                 <option v-for="cat in cleanCategories" :key="cat" :value="cat">{{ cat }}</option>
              </select>
         </div>
 
@@ -77,7 +77,8 @@
 </template>
 
 <script setup>
-import { reactive } from 'vue'
+import { reactive, computed } from 'vue'
+
 
 const props = defineProps({
   categories: {
@@ -88,6 +89,16 @@ const props = defineProps({
     type: Array,
     default: () => []
   }
+})
+
+// Double-safety filter
+const cleanCategories = computed(() => {
+    return props.categories.filter(c => {
+        if (!c) return false
+        if (c.includes('?ref')) return false
+        if (c.toLowerCase().includes('viewall')) return false
+        return true
+    })
 })
 
 const emit = defineEmits(['change'])

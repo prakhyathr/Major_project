@@ -1,6 +1,7 @@
 <template>
   <div class="flex min-h-full flex-1 flex-col justify-center px-6 py-12 lg:px-8">
     <div class="sm:mx-auto sm:w-full sm:max-w-md">
+      <img src="/assets/logo.jpg" alt="BLR Hive Logo" class="mx-auto h-16 w-auto mb-4">
       <h2 class="mt-6 text-center text-3xl font-bold leading-9 tracking-tight text-gray-900">Vendor Registration</h2>
       <p class="mt-2 text-center text-sm text-gray-600">
         Tell us about your business to get personalized event recommendations.

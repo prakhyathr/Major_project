@@ -17,3 +17,4 @@ requests
 email-validator
 playwright
 beautifulsoup4
+sentence-transformers

@@ -20,6 +20,7 @@ class Vendor(MongoBaseModel):
     business_name: Optional[str] = None
     category: Optional[str] = None
     interests: List[str] = []
+    saved_events: List[str] = [] # List of Event IDs
     travel_radius_km: float = 10.0
     location: Optional[dict] = None # GeoJSON Point
     created_at: datetime = Field(default_factory=datetime.utcnow)

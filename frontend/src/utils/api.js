@@ -43,4 +43,9 @@ export default {
 
     // Recommendations
     getRecommendations: () => api.get('/api/v1/recommendations/'),
+
+    // Saved Events
+    saveEvent: (id) => api.post(`/api/v1/vendors/saved-events/${id}`),
+    unsaveEvent: (id) => api.delete(`/api/v1/vendors/saved-events/${id}`),
+    getSavedEvents: () => api.get('/api/v1/vendors/saved-events'),
 };
