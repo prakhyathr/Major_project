@@ -59,6 +59,26 @@ class AllEventsScraper(BaseScraper):
                         venue_el = await card.query_selector(".subtitle")
                         venue_text = await venue_el.inner_text() if venue_el else ""
                         
+                        # Extract Price
+                        price_el = await card.query_selector(".price span")
+                        price_text = await price_el.inner_text() if price_el else ""
+                        price_text = price_text.strip()
+                        
+                        # Extract Interested Count
+                        interested_count = 0
+                        audience_el = await card.query_selector(".audience-text")
+                        if audience_el:
+                            audience_text = await audience_el.inner_text()
+                            # Parse "1891+ Interested" -> 1891
+                            try:
+                                # Remove commas and non-digits
+                                import re
+                                digits = re.sub(r"[^\d]", "", audience_text)
+                                if digits:
+                                    interested_count = int(digits)
+                            except:
+                                pass
+
                         # Fallback: Use full card text if venue is empty or for better matching
                         card_text = await card.inner_text()
                         full_text = f"{title} {venue_text} {card_text}"
@@ -87,7 +107,8 @@ class AllEventsScraper(BaseScraper):
                             lng = 77.5946 + random.uniform(-0.08, 0.08)
                             main_zone = "Bengaluru"
                         
-                        category = url.split('/')[-1].capitalize()
+                        category_slug = url.split('/')[-1]
+                        category = "General All Categories" if "cityhome_viewall" in category_slug else category_slug.capitalize()
                         
                         event = {
                             "title": title.strip(),
@@ -99,7 +120,9 @@ class AllEventsScraper(BaseScraper):
                                 "coordinates": [lng, lat]
                             },
                             "main_zone": main_zone,
-                            "category": category
+                            "category": category,
+                            "price_text": price_text,
+                            "interested_count": interested_count
                         }
                         all_events.append(self.clean_event(event))
                     except Exception as e:
